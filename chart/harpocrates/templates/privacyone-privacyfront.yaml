@@ -1,0 +1,151 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: privacyfront
+  labels:
+    app: privacyfront
+spec:
+  type: LoadBalancer
+  selector:
+    app: privacyfront
+  ports:
+    - port: 8443
+      targetPort: 8443
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: privacyfront-config
+data:
+  privacyfront.properties: |
+    zuul.routes.keychain.url=http://keychain:8090/api/v1/
+    zuul.routes.ldar.url=http://ldar:8091/api/v1/
+
+    # cerberus config
+    privacyone.cerberus.host=cerberus
+    privacyone.cerberus.port=8093
+    privacyone.cerberus.accountName=privacyfront
+    privacyone.cerberus.accountPassword=privacyfront
+
+    # token authorization
+    jwt.secret=${JWT_SECRET}
+
+    # keychain config
+    privacyone.keychain.host=keychain
+    privacyone.keychain.port=8090
+    # keychain analytics config
+    privacyone.keychainanalytics.host=keychain-analytics
+    privacyone.keychainanalytics.port=8095
+
+    # ldar config
+    privacyone.ldar.host=ldar
+    privacyone.ldar.port=8091
+
+    # dpia config
+    privacyone.dpia.host=dpia
+    privacyone.dpia.port=8097
+
+    # extra
+    privacyone.privacyfront.base.api.url=https://{{ .Values.domain.privacyfront }}:8443
+
+    # ssl config
+    server.port=8443
+
+    # certificate from customer
+    server.ssl.key-store=/etc/privacyone/privacyfront/keystore.properties
+    server.ssl.key-store-type=PEMCFG.MOD
+    server.ssl.key-store-password=dummy
+    server.ssl.key-alias=keycert
+
+    # Your authentication endpoint config
+    # Using customer authentication system, there is a hardcoded token which could bypass this authentication
+    privacyone.privacyfront.external.authentication.url=<YOUR_BUSINESS_USER_AUTHENTICATION_API_URL>
+    # Privacy Manager configuration
+    # Tweak the following configuration to customize the UI components you would like to have for your Privacy Manager
+    privacyone.privacymanager.enabledComponents=DataPolicies,DataRestriction,DataDownload,DataDeletion
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: privacyfront-keystore
+data:
+  keystore.properties: |
+    alias=keycert
+    source.cert=/etc/ssl/private/tls.crt
+    source.key=/etc/ssl/private/tls.key
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: privacyone-license
+data:
+  {{ $license := .Values.p1.license | b64dec | quote }}
+  {{ $license_data := $license | trimPrefix "\"" | trimSuffix "\"" }}
+  {{ $data_list := split "\\n" $license_data }}
+  license: |-
+    {{- range $data_list }}
+    {{ . }}
+    {{- end }}
+---
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: privacyfront
+  labels:
+    app.kubernetes.io/name: privacyfront
+    app: privacyfront
+spec:
+  selector:
+    matchLabels:
+      app: privacyfront
+  replicas: 1
+  serviceName: {{ .Release.Name }}-privacyfront-svc
+  template:
+    metadata:
+      labels:
+        app: privacyfront
+    spec:
+      containers:
+        - name: privacyfront
+          image: {{ .Values.image.privacyfront }}
+          env:
+            - name: P1_LICENSE
+              valueFrom:
+                secretKeyRef:
+                  name: license-secret
+                  key: license-data
+            - name: JWT_SECRET
+              value: {{ .Values.jwt.secret }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: privacyone-license-volume
+              mountPath: /etc/privacyone/license
+              subPath: license
+
+            - name: privacyfront-config-volume
+              mountPath: /etc/privacyone/privacyfront/privacyfront.properties
+              subPath: privacyfront.properties
+
+            - name: privacyfront-keystore-volume
+              mountPath: /etc/privacyone/privacyfront/keystore.properties
+              subPath: keystore.properties
+
+            - name: harpocrates-ssl-volume
+              mountPath: /etc/ssl/private
+      volumes:
+        - name: privacyone-license-volume
+          configMap:
+            name: privacyone-license
+        - name: privacyfront-config-volume
+          configMap:
+            name: privacyfront-config
+        - name: privacyfront-keystore-volume
+          configMap:
+            name: privacyfront-keystore
+        - name: harpocrates-ssl-volume
+          secret:
+            secretName: harpocrates-ssl

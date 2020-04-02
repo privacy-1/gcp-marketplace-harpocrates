@@ -1,0 +1,184 @@
+apiVersion: app.k8s.io/v1beta1
+kind: Application
+metadata:
+  name: "{{ .Release.Name }}"
+  namespace: "{{ .Release.Namespace }}"
+  labels:
+    app.kubernetes.io/name: "{{ .Release.Name }}"
+  annotations:
+    marketplace.cloud.google.com/deploy-info: '{"partner_id": "partner", "product_id": "harpocrates", "partner_name": "harpocrates"}'
+spec:
+  descriptor:
+    type: harpocrates
+    version: "1.0.1"
+    description: >-
+      Harpocrates is an infrastructure that safeguards your business data compliance (GDPR | CCPA) and data security.
+      # Support
+      Google does not offer support for this solution. However, community support is available on
+      [Stack Overflow](https://stackoverflow.com/questions/tagged/harpocrates/).
+      Additional Privacy1 support is available on
+      [Privacy1 support ticketing system](https://www.privacyone.co/contact).
+    links:
+    - description: 'User Guide: Harpocrates deployment'
+      url: https://gitlab.com/privacy1/gcp-marketplace-harpocrates/README.md
+    - description: 'Getting Started with Harpocrates'
+      url: https://app.privacyone.co/documentation
+    notes: |-
+      # Associate your static IP addresses
+      Change Privacy Console service IP and Privacy Front service IP from Ephumeral to static
+        1. Get your Privacy Console service IP by navigating to `Service & Ingress` -> `Endpoints of privacy-console`.
+           
+        2. Get your Privacy Front service IP by navigating to `Service & Ingress` -> `Endpoints of privacyfront`.
+           
+        3. Navigate to `Navigation menu` -> `VPC network` -> `External IP addresses`
+           Change the type of above two IP addresses from `Ephemeral` to `Static`
+
+        4. In your DNS server add two new A records
+           Bind Privacy Console static IP to **"{{ .Values.domain.console }}"**.
+           Bind Privacy Front static IP to **"{{ .Values.domain.privacyfront }}"**
+
+      # Configure firewall rules to white list your business internal access
+
+      The default firewall rule allows 0.0.0.0/0 to access Harpocrates infrastructure. You must allow ONLY your business user accounts to access Privacy Console. 
+      and ONLY your busines service accounts to access Harpocrates micro-services 
+      
+      Navigate to `Navigation menu` -> `Kubernetes Engine` -> `Clusters` -> `Connect` button on your cluster running Harpocrates and run
+
+      ```
+      $ FIREWALL_RULE_NAME=$(gcloud compute firewall-rules list | grep 8090 | grep 443 | cut -d ' ' -f 1)
+      $ gcloud compute firewall-rules update ${FIREWALL_RULE_NAME} --source-ranges=YOUR_BUSINESS_INTERNAL_VPN_IP/NETWORK_RANGE
+      
+      ```
+
+      # Configure user and service accounts in Harpocrates.
+
+      ## Update your Privacy Console Admin account default password.
+
+        1. Open your Privacy Console [{{ .Values.domain.console }}](https://{{ .Values.domain.console }}).
+
+        2. Login with the default username:**admin** password:**amdin**
+
+        3. Go to `My Account` tab from the top right dropdown menu and choose to `Update your account password`
+      
+      ## Update Privacy Front service account default password.
+
+        1. Open your Privacy Console [{{ .Values.domain.console }}](https://{{ .Values.domain.console }}).
+
+        2. Login with the default username:**privacyfront** password:**privacyfront**
+
+        3. Go to `My Account` tab from the top right dropdown menu and choose to `Update your account password`
+
+        4. Update Privacy Front service password in service properties by running
+
+        ```
+        $ kubectl edit configmap privacyfront-config \
+          --namespace {{ .Release.Namespace }}
+        ```
+        The above command will open `vi` editor. Update the value of field `data.privacyfront.properties.privacyone.cerberus.accountPassword`
+        with your new Privacy Front account password. Type `:wq` save and exit.
+
+        5. Restart Privacy Front service
+        ```
+        $ kubectl scale statefulset privacyfront --replicas=0 --namespace {{ .Release.Namespace }}
+        $ kubectl scale statefulset privacyfront --replicas=1 --namespace {{ .Release.Namespace }}
+        ```
+
+      ## Update LDAR service account default password.
+
+        1. Open your Privacy Console [{{ .Values.domain.console }}](https://{{ .Values.domain.console }}).
+
+        2. Login with the default username:**ldar**. key:**ldar**
+
+        3. Go to `My Account` tab from the top right corner and choose to `Update your account password`.
+
+        4. Update LDAR service password in service properties by running
+        ```
+        $ kubectl edit configmap ldar-config \
+          --namespace {{ .Release.Namespace }}
+        ```
+        The above command will open vi editor. Update the value of field `data.ldar.properties.privacyone.cerberus.accountPassword`
+        with your new ldar service account password. Type `:wq` save and exit.
+
+        5. Restart LDAR service
+        ```
+        $ kubectl scale statefulset ldar --replicas=0 --namespace {{ .Release.Namespace }}
+        $ kubectl scale statefulset ldar --replicas=1 --namespace {{ .Release.Namespace }}
+        ```
+
+      ## Update LDAR service key
+
+        1. Open your Privacy Console [{{ .Values.domain.console }}](https://{{ .Values.domain.console }}).
+
+        2. Login with Admin account.
+
+        3. Click on "Keychain". Navigate to "Services" from left side menu.
+
+        4. Click on "GENERATE SERVICE KEY" button. Write down the generated service key and keep it in a safe place.
+
+        5. Update LDAR service key in service properties by running
+        ```
+        $ kubectl edit configmap ldar-config \
+                  --namespace {{ .Release.Namespace }}
+        ```
+        The above command will open vi editor. Update the value of field `data.ldar.properties.privacyone.keychain.ldar.serviceKey`
+        with new generated key value. Type `:wq` save and exit.
+
+        6. Restart LDAR service
+        ```
+        $ kubectl scale statefulset ldar --replicas=0 --namespace {{ .Release.Namespace }}
+        $ kubectl scale statefulset ldar --replicas=1 --namespace {{ .Release.Namespace }}
+        ```
+
+      ## Config service account (Optional)
+
+        Service account is used in LDAR and Keychain Analytics services to grant access to data stored in google storage or aws S3.
+        Create two service accounts by following [LDAR and Keychain Analytics user guide](https://app.privacyone.co/documentation)
+        and download json key files. Copy LDAR key json file to /tmp/LDAR_JSON_KEY_FILE. Copy Keychain Analytics key json file to
+        /tmp/KCA_JSON_KEY_FILE. Fun below commands to update service account for LDAR and Keychain Analytics services.
+        ```
+        $ kubectl create configmap ldar-iam-config \
+            --namespace {{ .Release.Namespace }} \
+            --from-file=iam-service-account-key.json=/tmp/LDAR_JSON_KEY_FILE \
+            --dry-run -o yaml | kubectl apply -f -
+        $ kubectl create configmap keychainanalytics-iam-config \
+            --namespace {{ .Release.Namespace }} \
+            --from-file=iam-service-account-key.json=/tmp/KCA_JSON_KEY_FILE \
+                    --dry-run -o yaml | kubectl apply -f -
+        ```
+
+        Restart LDAR and Keychain Analytics service
+        ```
+        $ kubectl scale statefulset ldar --replicas=0 --namespace {{ .Release.Namespace }}
+        $ kubectl scale statefulset ldar --replicas=1 --namespace {{ .Release.Namespace }}
+
+        $ kubectl scale statefulset keychain-analytics --replicas=0 --namespace {{ .Release.Namespace }}
+        $ kubectl scale statefulset keychain-analytics --replicas=1 --namespace {{ .Release.Namespace }}
+        ```
+
+  info:
+  - name: Mysql DB username
+    type: Reference
+    valueFrom:
+      secretKeyRef:
+        key: db-user
+        name: {{ .Release.Name }}-mysql-secret
+  - name: Mysql DB password
+    type: Reference
+    valueFrom:
+      secretKeyRef:
+        key: db-password
+        name: {{ .Release.Name }}-mysql-secret
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Release.Name }}"
+  componentKinds:
+  - group: v1
+    kind: PersistentVolumeClaim
+  - group: apps/v1beta2
+    kind: StatefulSet
+  - group: v1
+    kind: Secret
+  - group: v1
+    kind: Service
+  - group: v1
+    kind: ConfigMap

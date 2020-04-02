@@ -1,0 +1,110 @@
+x-google-marketplace:
+  schemaVersion: v2
+
+  applicationApiVersion: v1beta1
+  publishedVersion: '1.0.1'
+  publishedVersionMetadata:
+    releaseNote: >-
+      Initial release.
+    releaseTypes:
+    - Feature
+    recommended: true
+
+  managedUpdates:
+    kalmSupported: true
+
+  images:
+    '':
+      properties:
+        image.console:
+          type: FULL
+    cerberus:
+      properties:
+        image.cerberus:
+          type: FULL
+    keychain:
+      properties:
+        image.keychain:
+          type: FULL
+    ldar:
+      properties:
+        image.ldar:
+          type: FULL
+    privacyfront:
+      properties:
+        image.privacyfront:
+          type: FULL
+    keychain-analytics:
+      properties:
+        image.keychainanalytics:
+          type: FULL
+    dpia:
+      properties:
+        image.dpia:
+          type: FULL
+properties:
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+  db.rootPassword:
+    type: string
+    x-google-marketplace:
+      type: GENERATED_PASSWORD
+      generatedPassword:
+        length: 12
+  db.harpocratesPassword:
+    type: string
+    x-google-marketplace:
+      type: GENERATED_PASSWORD
+      generatedPassword:
+        length: 12
+  jwt.secret:
+    type: string
+    x-google-marketplace:
+      type: GENERATED_PASSWORD
+      generatedPassword:
+        length: 12
+    title: JwtToken secret
+    description: Base64 encoded secret for signing jwt tokens used in Harpocrates systems. You can configure this later in each service property files.
+  domain.console:
+    type: string
+    title: Privacy Console domain name
+    description: Choose a domain e.g. console.privacy.YOUR_BIZ_DOMAIN for Privacy Console service which is used by your business.
+  domain.privacyfront:
+    type: string
+    title: Privacy Front domain name
+    description: Choose a domain e.g. manager.privacy.YOUR_BIZ_DOMAIN for Privacy Front service which is used by your mobile app or web app
+  tls.base64EncodedPrivateKey:
+    type: string
+    title: Harpocrates TLS private key (.pem or .key)
+    description: A Base64 encoded TLS key for protecting your Privacy Console and Privacy Front service. Encode TLS key file using 'cat YOUR_TLS_KEY_FILE.key | base64 -w 0'
+  tls.base64EncodedCertificate:
+    type: string
+    title: Harpocrates TLS certificate (.pem or .crt)
+    description: A Base64 encoded TLS certificate for protecting your Privacy Console and Privacy Front service. Encode TLS crt file using 'cat YOUR_TLS_CRT_FILE.crt | base64 -w 0'. We recommend you register a *.privacy.YOUR_BIZ_DOMAIN subdomin.
+  db.storageVolumeSize:
+    type: string
+    default: 25Gi
+    title: Storage
+    description: Size of disk for MySQL database. We recommend Harpocrates Lite version 25Gi | Platform Team 50Gi | Enterprice 100Gi | Enterprice+ 250Gi. Calculate wisely based on your user growth.
+  p1.license:
+    type: string
+    title: Harpocrates license
+    description: Download this file from https://app.privacyone.co/license. Encode license file using command 'cat LICENSE_FILE | base64 -w 0'    
+required:
+- name
+- namespace
+- db.rootPassword
+- db.harpocratesPassword
+- db.storageVolumeSize
+- jwt.secret
+- domain.console
+- domain.privacyfront
+- tls.base64EncodedPrivateKey
+- tls.base64EncodedCertificate
+- p1.license

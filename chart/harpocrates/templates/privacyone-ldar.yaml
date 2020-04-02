@@ -1,0 +1,117 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldar
+  labels:
+    app: ldar
+spec:
+  selector:
+    app: ldar
+  ports:
+    - port: 8091
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ldar-iam-config
+data:
+  iam-service-account-key.json: |
+    {
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ldar-config
+data:
+  ldar.properties: |
+    spring.datasource.url=jdbc:mysql://${MYSQL_DB_HOST}:3306/ldardb?serverTimezone=UTC&useLegacyDatetimeCode=false&useSSL=false&allowPublicKeyRetrieval=true
+    spring.datasource.username=${MYSQL_DB_USER}
+    spring.datasource.password=${MYSQL_DB_PASS}
+
+    # token authorization
+    jwt.secret=${JWT_SECRET}
+
+    #
+    # Below are optional values for phase II
+    #
+    server.port = 8091
+
+    # cerberus config
+    privacyone.cerberus.host=cerberus
+    privacyone.cerberus.accountPassword=ldar
+
+    # keychain config
+    privacyone.keychain.host=keychain
+    privacyone.keychain.ldar.serviceKey=<LDAR_SERVICE_KEY>
+    privacyone.sdk.keychain.cacheExpiration=300
+
+    # mailer config, optional
+    privacyone.ldar.messaging.sendgrid.apiKey=<SENDGRID_API_KEY>
+    privacyone.ldar.messaging.email.from=<FROM_EMAIL_ADDRESS>
+    privacyone.ldar.messaging.email.fromName=Download Your Data
+
+    # SMS config, optional
+    privacyone.ldar.messaging.sms.twilio.accountSID=<TWILIO_ACCOUNT_SID>
+    privacyone.ldar.messaging.sms.twilio.authToken=<TWILIO_AUTH_TOKEN>
+    privacyone.ldar.messaging.sms.twilio.fromNumber=<VERIFIED_TWILIO_NUMBER>
+
+    # IAM service account for generating temporary archive storage access tokens
+    iam.service-account-key.path=/etc/privacyone/ldar/iam-service-account-key.json
+---
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: ldar
+  labels:
+    app.kubernetes.io/name: ldar
+    app: ldar
+spec:
+  selector:
+    matchLabels:
+      app: ldar
+  replicas: 1
+  serviceName: {{ .Release.Name }}-ldar-svc
+  template:
+    metadata:
+      labels:
+        app: ldar
+    spec:
+      containers:
+        - name: ldar
+          image: {{ .Values.image.ldar }}
+          env:
+            - name: MYSQL_DB_HOST
+              value: {{ .Release.Name }}-mysql-svc
+            - name: MYSQL_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-mysql-secret
+                  key: db-user
+            - name: MYSQL_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-mysql-secret
+                  key: db-password
+            - name: JWT_SECRET
+              value: {{ .Values.jwt.secret }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8091
+          volumeMounts:
+            - name: ldar-config-volume
+              mountPath: /etc/privacyone/ldar/ldar.properties
+              subPath: ldar.properties
+            - name: ldar-iam-config-volume
+              mountPath: /etc/privacyone/ldar/iam-service-account-key.json
+              subPath: iam-service-account-key.json
+      volumes:
+        - name: ldar-config-volume
+          configMap:
+            name: ldar-config
+        - name: ldar-iam-config-volume
+          configMap:
+            name: ldar-iam-config

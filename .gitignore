@@ -1,0 +1,30 @@
+# system
+.DS_Store
+
+# ide
+*.idea
+
+# vscode
+.classpath
+.project
+/.settings
+.factorypath
+
+# dependencies
+node_modules
+
+# mvn
+mvnw
+mvnw.cmd
+
+# logging
+*.log.*
+*.log
+service/*.log.*
+
+# others
+*.iml
+*.gz
+
+build
+**/target

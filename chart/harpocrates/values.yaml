@@ -1,0 +1,28 @@
+db:
+  image: gcr.io/cloud-marketplace/google/mysql8:latest
+  rootPassword: null
+  harpocratesUser: p1-user
+  harpocratesPassword: null
+
+image:
+  cerberus: null
+  keychain: null
+  ldar: null
+  console: null
+  privacyfront: null
+  keychainanalytics: null
+  dpia: null
+
+jwt:
+  secret: null
+
+p1:
+  license: null
+
+tls:
+  base64EncodedPrivateKey: null
+  base64EncodedCertificate: null
+
+domain:
+  console: null
+  privacyfront: null

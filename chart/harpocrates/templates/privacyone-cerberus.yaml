@@ -1,0 +1,78 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cerberus
+  labels:
+    app: cerberus
+spec:
+  selector:
+    app: cerberus
+  ports:
+    - port: 8093
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cerberus-config
+data:
+  cerberus.properties: |
+    spring.datasource.url=jdbc:mysql://${MYSQL_DB_HOST}:3306/cerberusdb?serverTimezone=UTC&useLegacyDatetimeCode=false&useSSL=false&allowPublicKeyRetrieval=true
+    spring.datasource.username=${MYSQL_DB_USER}
+    spring.datasource.password=${MYSQL_DB_PASS}
+
+    # token authorization
+    jwt.secret=${JWT_SECRET}
+
+    #
+    # Below are optional values for phase II
+    #
+    server.port = 8093
+---
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: cerberus
+  labels:
+    app.kubernetes.io/name: cerberus
+    app: cerberus
+spec:
+  selector:
+    matchLabels:
+      app: cerberus
+  replicas: 1
+  serviceName: {{ .Release.Name }}-cerberus-svc
+  template:
+    metadata:
+      labels:
+        app: cerberus
+    spec:
+      containers:
+        - name: cerberus
+          image: {{ .Values.image.cerberus }}
+          env:
+            - name: MYSQL_DB_HOST
+              value: {{ .Release.Name }}-mysql-svc
+            - name: MYSQL_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-mysql-secret
+                  key: db-user
+            - name: MYSQL_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-mysql-secret
+                  key: db-password
+            - name: JWT_SECRET
+              value: {{ .Values.jwt.secret }}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8093
+          volumeMounts:
+            - name: cerberus-config-volume
+              mountPath: /etc/privacyone/cerberus
+      volumes:
+        - name: cerberus-config-volume
+          configMap:
+            name: cerberus-config
